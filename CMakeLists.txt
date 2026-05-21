@@ -22,7 +22,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(json)
 
-add_executable(kanban_board main.cpp)
+add_executable(kanban_board 
+    ./src/main.cpp 
+    ./src/KanbanBoard.cpp 
+    ./src/KanbanBoard.hpp 
+    ./src/Task.hpp
+)
 
 target_link_libraries(kanban_board PRIVATE 
     ftxui::screen 
