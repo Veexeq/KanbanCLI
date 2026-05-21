@@ -1,0 +1,7 @@
+build/
+
+.vscode/
+
+CMakeUserPresets.json
+
+kanban.json
