@@ -27,6 +27,8 @@ add_executable(kanban_board
     ./src/KanbanBoard.cpp 
     ./src/KanbanBoard.hpp 
     ./src/Task.hpp
+    ./src/StorageManager.cpp
+    ./src/StorageManager.hpp
 )
 
 target_link_libraries(kanban_board PRIVATE 
