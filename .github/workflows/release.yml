@@ -11,6 +11,9 @@ jobs:
     name: Cross-Compile and Package Artifacts
     runs-on: windows-latest
 
+    permissions:
+      contents: write
+
     steps:
       # Step 1: Extract the source code from the repository into the runner workspace.
       - name: Checkout Repository Source
