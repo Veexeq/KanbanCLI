@@ -168,8 +168,8 @@ int main() {
                 })
                 | border 
                 | center 
-                | size(WIDTH, EQUAL, 60)
-                | size(HEIGHT, EQUAL, 9),
+                | size(WIDTH, EQUAL, 65)
+                | size(HEIGHT, EQUAL, 11),
                 text("") | flex
             }) | center;
         }
