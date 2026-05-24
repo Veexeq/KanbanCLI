@@ -10,11 +10,12 @@
 int main() {
     using namespace ftxui;
 
-    // The data domain container is initialized with sample tasks.
+    // The data domain container is initialized.
     KanbanBoard board;
+    
+    // Initial sample tasks are appended to populate the board state.
     board.addTask("Write presentation", "Prepare slides for university demo", TaskPriority::HIGH);
     board.addTask("Refactor code", "Clean up variable names and enforce consistency", TaskPriority::MEDIUM);
-    board.addTask("Buy coffee", "Crucial resource for long programming sessions", TaskPriority::LOW);
     
     // One task is transitioned to another column for initial layout demonstration.
     board.updateTaskStatus(2, TaskStatus::IN_PROGRESS);
@@ -36,27 +37,47 @@ int main() {
         // A reusable layout generator for specific columns is established.
         auto render_column = [&](const std::string& title, const std::vector<::Task>& tasks, int column_id, Color header_color) {
             Elements task_elements;
-            
-            // The styled header text is added to the element stack.
-            task_elements.push_back(text("  " + title + "  ") | bold | color(header_color) | hcenter);
+            bool is_column_focused = (selected_column == column_id);
+
+            // Empty column - solution 1: The header text and styling are altered dynamically if an empty column is focused.
+            if (is_column_focused && tasks.empty()) {
+                task_elements.push_back(text("-> " + title + " <-") | bold | color(Color::Cyan) | hcenter);
+            } else {
+                task_elements.push_back(text("  " + title + "  ") | bold | color(header_color) | hcenter);
+            }
             task_elements.push_back(separator());
 
-            // Individual task elements are iterated and structurally transformed into visual nodes.
-            for (size_t i = 0; i < tasks.size(); ++i) {
-                bool is_focused = (selected_column == column_id && selected_task_index == static_cast<int>(i));
-                
-                auto task_box = vbox({
-                    text(tasks[i].title) | bold,
-                    text("ID: " + std::to_string(tasks[i].id) + " | " + tasks[i].created_at) | dim,
-                    separatorDashed(),
-                    text(tasks[i].description)
+            // Empty column - solution 2: A dedicated placeholder is generated and rendered when the task vector is empty.
+            if (tasks.empty()) {
+                auto placeholder_box = vbox({
+                    text("No tasks available") | center,
+                    text("Press [N] to create a new task") | center | dim
                 });
 
-                // Distinct borders are applied based on the current focus state coordinate matrix.
-                if (is_focused) {
-                    task_elements.push_back(window(text("-> ACTIVE <-") | color(Color::Cyan), task_box) | color(Color::Cyan));
+                // The placeholder component layout is styled based on the column focus state.
+                if (is_column_focused) {
+                    task_elements.push_back(window(text("Empty Column") | color(Color::Cyan), placeholder_box) | color(Color::Cyan));
                 } else {
-                    task_elements.push_back(window(text("Task"), task_box));
+                    task_elements.push_back(window(text("Empty"), placeholder_box) | dim);
+                }
+            } else {
+                // Individual task elements are iterated and structurally transformed into visual nodes.
+                for (size_t i = 0; i < tasks.size(); ++i) {
+                    bool is_task_focused = (is_column_focused && selected_task_index == static_cast<int>(i));
+                    
+                    auto task_box = vbox({
+                        text(tasks[i].title) | bold,
+                        text("ID: " + std::to_string(tasks[i].id) + " | " + tasks[i].created_at) | dim,
+                        separatorDashed(),
+                        text(tasks[i].description)
+                    });
+
+                    // Distinct borders are applied based on the current focus state coordinate matrix.
+                    if (is_task_focused) {
+                        task_elements.push_back(window(text("-> ACTIVE <-") | color(Color::Cyan), task_box) | color(Color::Cyan));
+                    } else {
+                        task_elements.push_back(window(text("Task"), task_box));
+                    }
                 }
             }
 
