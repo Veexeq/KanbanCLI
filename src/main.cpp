@@ -33,12 +33,8 @@ int main() {
     auto loaded_tasks = storage.loadTasks();
     if (!loaded_tasks.empty()) {
         for (const auto& task : loaded_tasks) {
-            // Tasks are re-registered into the active business logic model.
             board.addTask(task.title, task.description, task.priority);
-            
-            // The runtime status layout is updated to match the historical record.
             if (task.status != TaskStatus::TODO) {
-                // The task is advanced to its correct column location.
                 auto active_tasks = board.getTasksByStatus(TaskStatus::TODO);
                 if (!active_tasks.empty()) {
                     board.updateTaskStatus(active_tasks.back().id, task.status);
@@ -46,7 +42,6 @@ int main() {
             }
         }
     } else {
-        // Fallback demo elements are generated only if no database file is detected.
         board.addTask("Write presentation", "Prepare slides for university demo", TaskPriority::HIGH);
         board.addTask("Refactor code", "Clean up variable names and enforce consistency", TaskPriority::MEDIUM);
         board.addTask("Buy coffee", "Crucial resource for long programming sessions", TaskPriority::LOW);
@@ -55,40 +50,41 @@ int main() {
     }
 
     // Coordinate state trackers for the grid matrix are declared.
-    int selected_column = 0;       // 0: TODO, 1: IN_PROGRESS, 2: DONE
-    int selected_task_index = 0;   // Vertical index within the currently focused column
+    int selected_column = 0;       
+    int selected_task_index = 0;   
 
     // Modal view tracking variables and input buffers are established.
     bool is_modal_active = false;
+    bool is_edit_mode = false;      // New state tracker to distinguish creation from modification
+    int editing_task_id = -1;       // Stores the active ID of the entity being mutated
+    
     std::string input_title_buffer;
     std::string input_desc_buffer;
 
-    // Interactive FTXUI component elements are generated for input recording.
     Component input_title = Input(&input_title_buffer, "Enter task title...");
     Component input_desc = Input(&input_desc_buffer, "Enter task description...");
 
-    // The sub-components are combined inside a structured vertical block container.
     auto modal_container = Container::Vertical({
         input_title,
         input_desc
     });
 
-    // The interactive terminal screen display manager is instantiated.
     auto screen = ScreenInteractive::TerminalOutput();
 
-    // The declarative layout UI structure is defined within the main renderer loop.
     auto renderer = Renderer(modal_container, [&] {
         
-        // Approach 1 Execution Path: If the modal state is active, the Kanban board layout is completely bypassed.
+        // Approach 1 Execution Path: The modal sequence is initiated.
         if (is_modal_active) {
+            // The dialogue header title is dynamically changed based on the operational context.
+            std::string modal_title = is_edit_mode ? " EDIT ACTIVE TASK " : " CREATE NEW TASK ";
+            
             return vbox({
                 text("") | flex,
                 vbox({
-                    text(" CREATE NEW TASK ") | bold | color(Color::Cyan) | hcenter,
+                    text(modal_title) | bold | color(Color::Cyan) | hcenter,
                     separator(),
                     text(""),
                     
-                    // Form input fields are rendered on a clean terminal buffer slate.
                     hbox(text("  Title:       ") | bold, input_title->Render() | focus),
                     text(""),
                     hbox(text("  Description: ") | bold, input_desc->Render()),
@@ -105,17 +101,15 @@ int main() {
             }) | center;
         }
 
-        // Standard Execution Path: The primary dashboard view is rendered when the modal is inactive.
+        // Standard Execution Path: The main interactive dashboard grid is evaluated.
         auto todo_tasks = board.getTasksByStatus(TaskStatus::TODO);
         auto in_progress_tasks = board.getTasksByStatus(TaskStatus::IN_PROGRESS);
         auto done_tasks = board.getTasksByStatus(TaskStatus::DONE);
 
-        // A reusable layout builder for specific columns is established.
         auto render_column = [&](const std::string& title, const std::vector<::Task>& tasks, int column_id, Color header_color) {
             Elements task_elements;
             bool is_column_focused = (selected_column == column_id);
 
-            // The header text is rendered with custom cyan focus tracking on empty blocks.
             if (is_column_focused && tasks.empty()) {
                 task_elements.push_back(text("-> " + title + " <-") | bold | color(Color::Cyan) | hcenter);
             } else {
@@ -123,7 +117,6 @@ int main() {
             }
             task_elements.push_back(separator());
 
-            // A visual placeholder card is displayed if no entities are contained.
             if (tasks.empty()) {
                 auto placeholder_box = vbox({
                     text("No tasks available") | center,
@@ -136,7 +129,6 @@ int main() {
                     task_elements.push_back(window(text("Empty"), placeholder_box) | dim);
                 }
             } else {
-                // Task vectors are structurally transformed into styled interface nodes.
                 for (size_t i = 0; i < tasks.size(); ++i) {
                     bool is_task_focused = (is_column_focused && selected_task_index == static_cast<int>(i));
                     
@@ -158,7 +150,6 @@ int main() {
             return vbox(std::move(task_elements)) | flex;
         };
 
-        // Columns are horizontally grouped to form the core dashboard matrix layout.
         auto board_layout = ftxui::hbox({
             render_column("TO DO", todo_tasks, 0, Color::Red),
             separator(),
@@ -167,11 +158,12 @@ int main() {
             render_column("DONE", done_tasks, 2, Color::Green),
         }) | flex;
 
-        // The status navigation helper legend is formatted for the interface floor.
+        // Expanded helper legend layout includes the modification command shortcut.
         auto status_bar = ftxui::hbox({
             text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
-            text(" [Space/Enter] Transition Task ") | bgcolor(Color::Green),
-            text(" [N] New Task ") | bgcolor(Color::Cyan),
+            text(" [Space/Enter] Move Column ") | bgcolor(Color::Green),
+            text(" [N] New ") | bgcolor(Color::Cyan),
+            text(" [E] Edit ") | bgcolor(Color::Magenta), // Added visual shortcut for editing
             text(" [D] Delete ") | bgcolor(Color::GrayDark),
             text(" ") | flex,
             text(" [Q] Quit ") | bgcolor(Color::Red) | bold
@@ -180,40 +172,45 @@ int main() {
         return vbox({ board_layout, separator(), status_bar });
     });
 
-    // Keyboard capture sequences are parsed and intercepted within the global runtime event block.
     auto catch_event = CatchEvent(renderer, [&](Event event) {
-        // Current collection capacities are monitored to enforce boundary limitations.
         auto get_current_tasks_vector = [&]() -> std::vector<::Task> {
             if (selected_column == 0) return board.getTasksByStatus(TaskStatus::TODO);
             if (selected_column == 1) return board.getTasksByStatus(TaskStatus::IN_PROGRESS);
             return board.getTasksByStatus(TaskStatus::DONE);
         };
 
-        // Keyboard tracking is diverted when the modal dialogue layer is active.
         if (is_modal_active) {
             if (event == Event::Escape) {
+                // Input buffers and states are safely flushed upon aborting the context.
+                input_title_buffer.clear();
+                input_desc_buffer.clear();
                 is_modal_active = false;
+                is_edit_mode = false;
+                editing_task_id = -1;
                 return true;
             }
             if (event == Event::Return) {
                 if (!input_title_buffer.empty()) {
-                    // The filled payload is appended to the business logic engine.
-                    board.addTask(input_title_buffer, input_desc_buffer, TaskPriority::MEDIUM);
+                    // Operational routing is executed based on the active structural mode flag.
+                    if (is_edit_mode) {
+                        board.updateTaskDetails(editing_task_id, input_title_buffer, input_desc_buffer);
+                    } else {
+                        board.addTask(input_title_buffer, input_desc_buffer, TaskPriority::MEDIUM);
+                    }
                     saveBoardState(board, storage);
                     
-                    // Buffers are flushed and focus is returned to the dashboard.
+                    // Buffers and operational states are cleared post-commit.
                     input_title_buffer.clear();
                     input_desc_buffer.clear();
                     is_modal_active = false;
+                    is_edit_mode = false;
+                    editing_task_id = -1;
                 }
                 return true;
             }
-            
-            // Input event loops are directed towards active string capturing components.
             return modal_container->OnEvent(event);
         }
 
-        // Standard dashboard control mapping tracking.
         if (event == Event::Character('q') || event == Event::Character('Q')) {
             screen.Exit();
             return true;
@@ -221,18 +218,31 @@ int main() {
 
         if (event == Event::Character('n') || event == Event::Character('N')) {
             is_modal_active = true;
+            is_edit_mode = false; // Ensures standard record entry behavior
             return true;
         }
 
         auto active_vector = get_current_tasks_vector();
         bool has_active_task = (!active_vector.empty() && selected_task_index < static_cast<int>(active_vector.size()));
 
-        // Delete Command Execution Hook.
+        // Edit Command Execution Hook.
+        if ((event == Event::Character('e') || event == Event::Character('E')) && has_active_task) {
+            auto current_task = active_vector[selected_task_index];
+            
+            // UI buffers are pre-loaded with historical records to support localized text mutation.
+            input_title_buffer = current_task.title;
+            input_desc_buffer = current_task.description;
+            
+            // Operational flags are configured to activate the modification dialog context.
+            editing_task_id = current_task.id;
+            is_edit_mode = true;
+            is_modal_active = true;
+            return true;
+        }
+
         if ((event == Event::Character('d') || event == Event::Character('D')) && has_active_task) {
             board.removeTask(active_vector[selected_task_index].id);
             saveBoardState(board, storage);
-            
-            // Focused index coordinates are recalculated to fit within the shrunken collection.
             int revised_size = static_cast<int>(get_current_tasks_vector().size());
             if (selected_task_index >= revised_size && revised_size > 0) {
                 selected_task_index = revised_size - 1;
@@ -240,7 +250,6 @@ int main() {
             return true;
         }
 
-        // Advanced Transition State Hook (Space or Enter).
         if ((event == Event::Special(" ") || event == Event::Return) && has_active_task) {
             auto task_to_move = active_vector[selected_task_index];
             if (selected_column == 0) {
@@ -249,8 +258,6 @@ int main() {
                 board.updateTaskStatus(task_to_move.id, TaskStatus::DONE);
             }
             saveBoardState(board, storage);
-            
-            // Structural layout indexes are checked to prevent null reference highlights.
             int revised_size = static_cast<int>(get_current_tasks_vector().size());
             if (selected_task_index >= revised_size && revised_size > 0) {
                 selected_task_index = revised_size - 1;
@@ -258,7 +265,6 @@ int main() {
             return true;
         }
 
-        // Grid navigation controls processing.
         if (event == Event::ArrowLeft) {
             selected_column = std::max(0, selected_column - 1);
             selected_task_index = 0;
@@ -284,7 +290,6 @@ int main() {
         return false;
     });
 
-    // The runtime event polling engine is activated.
     screen.Loop(catch_event);
 
     return 0;
