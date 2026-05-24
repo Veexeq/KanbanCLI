@@ -18,5 +18,5 @@ public:
 
     bool updateTaskStatus(int id, TaskStatus new_status);
 
-    void updateTaskDetails(int id, const std::string& new_title, const std::string& new_description);
+    void updateTaskDetails(int id, const std::string& title, const std::string& description, TaskPriority priority);
 };

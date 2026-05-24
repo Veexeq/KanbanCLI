@@ -56,12 +56,13 @@ bool KanbanBoard::updateTaskStatus(int id, TaskStatus new_status) {
     return false;
 }
 
-void KanbanBoard::updateTaskDetails(int id, const std::string& new_title, const std::string& new_description) {
-    for (auto& task : m_tasks) {
+void KanbanBoard::updateTaskDetails(int id, const std::string& title, const std::string& description, TaskPriority priority) {
+    for (auto& task : m_tasks) { 
         if (task.id == id) {
-            task.title = new_title;
-            task.description = new_description;
-            break;
+            task.title = title;
+            task.description = description;
+            task.priority = priority;
+            return;
         }
     }
 }

@@ -17,11 +17,6 @@
 #include "Theme.hpp"
 #include "AppState.hpp"
 
-/**
- * @brief Serializes the entire transactional application state out to the localized JSON database target.
- * @param board Reference to the core application business logic container model.
- * @param storage Reference to the persistent block writing storage engine component.
- */
 void saveBoardState(const KanbanBoard& board, const StorageManager& storage) {
     std::vector<::Task> all_tasks;
     for (auto status : {TaskStatus::TODO, TaskStatus::IN_PROGRESS, TaskStatus::DONE}) {
@@ -34,14 +29,10 @@ void saveBoardState(const KanbanBoard& board, const StorageManager& storage) {
 int main() {
     using namespace ftxui;
 
-    // The storage engine and core domain model container are instantiated.
     StorageManager storage("kanban.json");
     KanbanBoard board;
-    
-    // Item 1: Refactoring State Management into a dedicated class object block container.
     AppState state;
 
-    // Persistent data is loaded from disk if the storage target exists.
     auto loaded_tasks = storage.loadTasks();
     if (!loaded_tasks.empty()) {
         for (const auto& task : loaded_tasks) {
@@ -54,26 +45,28 @@ int main() {
             }
         }
     } else {
-        // Production Configuration: An empty database state is initialized cleanly on the first execution.
         saveBoardState(board, storage);
     }
 
-    // Input component capture frameworks are generated.
+    // Feature 2: Priority options array declaration and Toggle component instantiation
+    std::vector<std::string> priority_options = { "  LOW  ", "  MEDIUM  ", "  HIGH  " };
+    
     Component input_title = Input(&state.input_title_buffer, "Enter task title...");
     Component input_desc = Input(&state.input_desc_buffer, "Type descriptive details here...");
+    Component input_priority = Toggle(&priority_options, &state.input_priority_index);
 
+    // Grouping components inside the interactive modal layout container tree
     auto modal_container = Container::Vertical({
         input_title,
-        input_desc
+        input_desc,
+        input_priority
     });
 
     auto screen = ScreenInteractive::TerminalOutput();
 
-    // The core presentation generation engine block is defined.
     auto renderer = Renderer(modal_container, [&] {
         auto terminal_dimensions = ftxui::Terminal::Size();
         
-        // Dynamic horizontal layout slice metrics are evaluated using the configuration values.
         int computed_column_width = (terminal_dimensions.dimx - Theme::HORIZONTAL_PADDING) / Theme::COLUMN_COUNT;
         if (computed_column_width < Theme::MIN_COLUMN_WIDTH) computed_column_width = Theme::MIN_COLUMN_WIDTH; 
         
@@ -84,7 +77,6 @@ int main() {
         int inside_card_wrap_limit = computed_column_width - 4;
         if (inside_card_wrap_limit < 5) inside_card_wrap_limit = 5;
 
-        // Structured string cutting utility helper.
         auto split_text_to_lines = [](const std::string& text_payload, size_t max_line_width) {
             Elements line_nodes;
             if (text_payload.empty()) {
@@ -129,7 +121,7 @@ int main() {
             return line_nodes;
         };
 
-        // Execution Path A: Modal Data Creation/Modification Dialogue view logic loop.
+        // UI Execution Path A: Task Creation / Modification Dialog Layout Matrix
         if (state.is_modal_active) {
             std::string modal_title = state.is_edit_mode ? " EDIT ACTIVE TASK " : " CREATE NEW TASK ";
             return vbox({
@@ -140,7 +132,10 @@ int main() {
                     text(""),
                     hbox(text("  Title:       ") | bold, input_title->Render()),
                     text(""),
-                    hbox(text("  Input Line:  ") | bold, input_desc->Render()),
+                    hbox(text("  Description: ") | bold, input_desc->Render()),
+                    text(""),
+                    // Feature 2 UI Placement: Rendering the horizontal priority selector
+                    hbox(text("  Priority:    ") | bold, input_priority->Render() | color(Theme::COLOR_FOCUS)),
                     text(""),
                     window(text(" Description Canvas (Dynamic Multiline View) ") | color(Theme::COLOR_CANVAS_BORDER),
                            vbox(split_text_to_lines(state.input_desc_buffer, 65))
@@ -156,7 +151,7 @@ int main() {
             }) | center;
         }
 
-        // Execution Path B: UX Feature 4 Confirmation Overlay view sequence block.
+        // UI Execution Path B: UX Feature 3 Update - Confirmation Overlay View (Enter/Esc Matrix)
         if (state.is_confirming_delete) {
             return vbox({
                 text("") | flex,
@@ -168,7 +163,8 @@ int main() {
                     text(" This action is destructive and cannot be undone. ") | hcenter | dim,
                     text(""),
                     separator(),
-                    text(" [Y] Yes, Delete Record  |  [N / Esc] No, Cancel Operation ") | center | bold
+                    // Feature 3 Text Update: Inform user about Enter / Esc confirmation mechanics
+                    text(" [Enter] Yes, Delete Record  |  [Esc] No, Cancel Operation ") | center | bold | color(ftxui::Color::Red)
                 })
                 | border 
                 | center 
@@ -178,7 +174,7 @@ int main() {
             }) | center;
         }
 
-        // Execution Path C: Standard interactive task canvas layout engine sequence.
+        // UI Execution Path C: Standard Dashboard Presentation Canvas Layout
         auto todo_tasks = board.getTasksByStatus(TaskStatus::TODO);
         auto in_progress_tasks = board.getTasksByStatus(TaskStatus::IN_PROGRESS);
         auto done_tasks = board.getTasksByStatus(TaskStatus::DONE);
@@ -289,8 +285,9 @@ int main() {
             return board.getTasksByStatus(TaskStatus::DONE);
         };
 
+        // Feature 3 Logic Check: Overriding deletion warning confirmations to handle Enter / Escape
         if (state.is_confirming_delete) {
-            if (event == Event::Character('y') || event == Event::Character('Y')) {
+            if (event == Event::Return) { // Enter confirms deletion
                 auto active_vector = get_current_tasks_vector();
                 if (!active_vector.empty() && state.selected_task_index < static_cast<int>(active_vector.size())) {
                     board.removeTask(active_vector[state.selected_task_index].id);
@@ -304,7 +301,7 @@ int main() {
                 state.flushBuffers();
                 return true;
             }
-            if (event == Event::Character('n') || event == Event::Character('N') || event == Event::Escape) {
+            if (event == Event::Escape) { // Escape aborts deletion cleanly
                 state.flushBuffers();
                 return true;
             }
@@ -318,10 +315,15 @@ int main() {
             }
             if (event == Event::Return) {
                 if (!state.input_title_buffer.empty()) {
+                    // Feature 2: Evaluation of the selected priority enum mapping
+                    TaskPriority p = TaskPriority::MEDIUM;
+                    if (state.input_priority_index == 0) p = TaskPriority::LOW;
+                    else if (state.input_priority_index == 2) p = TaskPriority::HIGH;
+
                     if (state.is_edit_mode) {
-                        board.updateTaskDetails(state.editing_task_id, state.input_title_buffer, state.input_desc_buffer);
+                        board.updateTaskDetails(state.editing_task_id, state.input_title_buffer, state.input_desc_buffer, p);
                     } else {
-                        board.addTask(state.input_title_buffer, state.input_desc_buffer, TaskPriority::MEDIUM);
+                        board.addTask(state.input_title_buffer, state.input_desc_buffer, p);
                     }
                     saveBoardState(board, storage);
                     state.flushBuffers();
@@ -355,6 +357,12 @@ int main() {
             state.input_title_buffer = current_task.title;
             state.input_desc_buffer = current_task.description;
             state.editing_task_id = current_task.id;
+            
+            // Map the active enum back to the UI index buffer when opening edit mode
+            if (current_task.priority == TaskPriority::LOW) state.input_priority_index = 0;
+            else if (current_task.priority == TaskPriority::HIGH) state.input_priority_index = 2;
+            else state.input_priority_index = 1;
+
             state.is_edit_mode = true;
             state.is_modal_active = true;
             return true;
