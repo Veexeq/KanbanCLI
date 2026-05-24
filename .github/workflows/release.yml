@@ -41,7 +41,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path .\dist
           Copy-Item -Path .\build\kanban_board.exe -Destination .\dist\kanban_board.exe
-          Copy-Item -Path .\Uruchom_Kanban.bat -Destination .\dist\Uruchom_Kanban.bat
+          Copy-Item -Path .\run_kanban.bat -Destination .\dist\run_kanban.bat
           
           # Initialize a pristine production JSON database for the user bundle
           "{}" | Out-File -FilePath .\dist\kanban.json -Encoding utf8
