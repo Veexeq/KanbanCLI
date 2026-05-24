@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <iostream> // Added to support standard stream flushes
 #include "KanbanBoard.hpp"
 #include "StorageManager.hpp"
 
@@ -81,17 +82,18 @@ int main() {
         int computed_column_width = (terminal_dimensions.dimx - 2) / 3;
         if (computed_column_width < 15) computed_column_width = 15; 
         
-        // The maximum structural vertical boundary height limit is strictly locked.
-        int computed_board_height = terminal_dimensions.dimy - 3;
+        // CRITICAL UX FIX: Responsive layout toggle thresholds are checked to dynamically re-scale heights.
+        bool is_narrow_viewport = (terminal_dimensions.dimx < 95);
+        
+        // The mathematical layout height targets 100% screen utilization precisely based on row stack depth.
+        int computed_board_height = terminal_dimensions.dimy - (is_narrow_viewport ? 3 : 2);
         if (computed_board_height < 5) computed_board_height = 5;
 
-        // CRITICAL UX FIX: Safe line wrapping limits are tightly constrained to ensure the window 
-        // bounding box (content + borders) never triggers horizontal frame scrolling.
+        // Safe line wrapping limits are established based on the active dynamic column bounds.
         int inside_card_wrap_limit = computed_column_width - 4;
         if (inside_card_wrap_limit < 5) inside_card_wrap_limit = 5;
 
-        // A highly robust text tokenizer lambda that supports rigid hard word-breaking 
-        // to prevent unbroken text blocks (e.g., long strings or URLs) from expanding layout containers.
+        // A robust custom text tokenizer lambda is established to slice strings cleanly.
         auto split_text_to_lines = [](const std::string& text_payload, size_t max_line_width) {
             Elements line_nodes;
             if (text_payload.empty()) {
@@ -102,7 +104,6 @@ int main() {
             std::string current_line = "";
             std::string current_word = "";
             
-            // Inner lambda helper forcefully slices words exceeding the width threshold boundary.
             auto append_word = [&](const std::string& word) {
                 std::string processed_chunk = word;
                 while (processed_chunk.length() > max_line_width) {
@@ -192,7 +193,6 @@ int main() {
             header_elements.push_back(separator());
 
             if (tasks.empty()) {
-                // Placeholder elements are tokenized dynamically to prevent text boundary spillages.
                 auto placeholder_box = vbox(split_text_to_lines("No tasks available. Press [N] to create.", inside_card_wrap_limit));
 
                 if (is_column_focused) {
@@ -212,7 +212,6 @@ int main() {
                     });
 
                     if (is_task_focused) {
-                        // The window title is condensed to 'Active' to prevent structural overflow on small displays.
                         content_elements.push_back(window(text("Active") | color(Color::Cyan), task_box) | color(Color::Cyan) | focus);
                     } else {
                         content_elements.push_back(window(text("Task"), task_box));
@@ -237,15 +236,35 @@ int main() {
             render_column("DONE", done_tasks, 2, Color::Green),
         }) | size(HEIGHT, EQUAL, computed_board_height); 
 
-        auto status_bar = ftxui::hbox({
-            text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
-            text(" [Space/Enter] Move Column ") | bgcolor(Color::Green),
-            text(" [N] New ") | bgcolor(Color::Cyan),
-            text(" [E] Edit ") | bgcolor(Color::Magenta), 
-            text(" [D] Delete ") | bgcolor(Color::GrayDark),
-            text(" ") | flex,
-            text(" [Q] Quit ") | bgcolor(Color::Red) | bold
-        });
+        // CRITICAL FIX: The interface control legend responds dynamically to structural width changes.
+        Element status_bar;
+        if (is_narrow_viewport) {
+            // A condensed double-row block architecture prevents wrap overflow failures on small terminals.
+            status_bar = vbox({
+                hbox({
+                    text(" [Arrows] Focus Grid ") | bgcolor(Color::Blue) | bold,
+                    text(" [Space] Move Column ") | bgcolor(Color::Green),
+                    text(" [N] New Task ") | bgcolor(Color::Cyan)
+                }),
+                hbox({
+                    text(" [E] Edit Task ") | bgcolor(Color::Magenta), 
+                    text(" [D] Delete ") | bgcolor(Color::GrayDark),
+                    text(" ") | flex,
+                    text(" [Q] Quit ") | bgcolor(Color::Red) | bold
+                })
+            });
+        } else {
+            // A streamlined single-line configuration layout is activated on large screen buffers.
+            status_bar = ftxui::hbox({
+                text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
+                text(" [Space/Enter] Move Column ") | bgcolor(Color::Green),
+                text(" [N] New ") | bgcolor(Color::Cyan),
+                text(" [E] Edit ") | bgcolor(Color::Magenta), 
+                text(" [D] Delete ") | bgcolor(Color::GrayDark),
+                text(" ") | flex,
+                text(" [Q] Quit ") | bgcolor(Color::Red) | bold
+            });
+        }
 
         return vbox({ board_layout, separator(), status_bar });
     });
@@ -359,6 +378,9 @@ int main() {
 
         return false;
     });
+
+    // CRITICAL FIX: The terminal screen buffer is cleared completely before starting the main loop interface.
+    std::cout << "\033[2J\033[H" << std::flush;
 
     screen.Loop(catch_event);
 
