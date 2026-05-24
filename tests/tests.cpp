@@ -15,9 +15,9 @@ TEST_CASE("KanbanBoard - Core State and Business Logic Mutations", "[kanban]") {
     // Domain model entities typically assign a sequence identifier of 1 to the initial record.
     int test_task_id = 1;
 
-    SECTION("Task text components can be successfully mutated via editing hooks") {
-        // Execute the targeted business logic update method.
-        board.updateTaskDetails(test_task_id, "Revised Title", "Revised Description");
+    SECTION("Task text and priority components can be successfully mutated via editing hooks") {
+        // UPDATED: Execute the targeted business logic update method passing the new priority parameter
+        board.updateTaskDetails(test_task_id, "Revised Title", "Revised Description", TaskPriority::HIGH);
         
         auto todo_tasks = board.getTasksByStatus(TaskStatus::TODO);
         
@@ -25,6 +25,7 @@ TEST_CASE("KanbanBoard - Core State and Business Logic Mutations", "[kanban]") {
         REQUIRE(todo_tasks.size() == 1);
         CHECK(todo_tasks[0].title == "Revised Title");
         CHECK(todo_tasks[0].description == "Revised Description");
+        CHECK(todo_tasks[0].priority == TaskPriority::HIGH);
     }
 
     SECTION("Tasks transition forward and backward cleanly across workflow swimlanes") {
