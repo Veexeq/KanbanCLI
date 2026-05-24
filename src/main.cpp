@@ -81,16 +81,17 @@ int main() {
         int computed_column_width = (terminal_dimensions.dimx - 2) / 3;
         if (computed_column_width < 15) computed_column_width = 15; 
         
-        // CRITICAL FIX: The maximum structural vertical boundary height limit is strictly locked 
-        // to prevent terminal-level buffer thrashing and window flickering on Windows.
+        // The maximum structural vertical boundary height limit is strictly locked.
         int computed_board_height = terminal_dimensions.dimy - 3;
         if (computed_board_height < 5) computed_board_height = 5;
 
-        // Safe line wrapping limits are established based on the active dynamic column bounds.
-        int inside_card_wrap_limit = computed_column_width - 6;
+        // CRITICAL UX FIX: Safe line wrapping limits are tightly constrained to ensure the window 
+        // bounding box (content + borders) never triggers horizontal frame scrolling.
+        int inside_card_wrap_limit = computed_column_width - 4;
         if (inside_card_wrap_limit < 5) inside_card_wrap_limit = 5;
 
-        // A robust custom text tokenizer lambda is established to slice strings cleanly.
+        // A highly robust text tokenizer lambda that supports rigid hard word-breaking 
+        // to prevent unbroken text blocks (e.g., long strings or URLs) from expanding layout containers.
         auto split_text_to_lines = [](const std::string& text_payload, size_t max_line_width) {
             Elements line_nodes;
             if (text_payload.empty()) {
@@ -98,35 +99,46 @@ int main() {
                 return line_nodes;
             }
             
-            std::string current_accumulator = "";
+            std::string current_line = "";
             std::string current_word = "";
             
+            // Inner lambda helper forcefully slices words exceeding the width threshold boundary.
+            auto append_word = [&](const std::string& word) {
+                std::string processed_chunk = word;
+                while (processed_chunk.length() > max_line_width) {
+                    if (!current_line.empty()) {
+                        line_nodes.push_back(text(current_line));
+                        current_line = "";
+                    }
+                    line_nodes.push_back(text(processed_chunk.substr(0, max_line_width)));
+                    processed_chunk = processed_chunk.substr(max_line_width);
+                }
+                
+                if (current_line.empty()) {
+                    current_line = processed_chunk;
+                } else if (current_line.length() + 1 + processed_chunk.length() > max_line_width) {
+                    line_nodes.push_back(text(current_line));
+                    current_line = processed_chunk;
+                } else {
+                    current_line += " " + processed_chunk;
+                }
+            };
+
             for (char character : text_payload) {
                 if (character == ' ') {
-                    if (current_accumulator.length() + current_word.length() + 1 > max_line_width) {
-                        line_nodes.push_back(text(current_accumulator));
-                        current_accumulator = current_word;
-                    } else {
-                        if (!current_accumulator.empty()) current_accumulator += " ";
-                        current_accumulator += current_word;
+                    if (!current_word.empty()) {
+                        append_word(current_word);
+                        current_word = "";
                     }
-                    current_word = "";
                 } else {
                     current_word += character;
                 }
             }
-            
             if (!current_word.empty()) {
-                if (current_accumulator.length() + current_word.length() + 1 > max_line_width) {
-                    line_nodes.push_back(text(current_accumulator));
-                    current_accumulator = current_word;
-                } else {
-                    if (!current_accumulator.empty()) current_accumulator += " ";
-                    current_accumulator += current_word;
-                }
+                append_word(current_word);
             }
-            if (!current_accumulator.empty()) {
-                line_nodes.push_back(text(current_accumulator));
+            if (!current_line.empty()) {
+                line_nodes.push_back(text(current_line));
             }
             return line_nodes;
         };
@@ -172,7 +184,6 @@ int main() {
             Elements content_elements;
             bool is_column_focused = (selected_column == column_id);
 
-            // Sticky Area: Generated outside the frame block to keep column names docked.
             if (is_column_focused && tasks.empty()) {
                 header_elements.push_back(text("-> " + title + " <-") | bold | color(Color::Cyan) | hcenter);
             } else {
@@ -181,13 +192,11 @@ int main() {
             header_elements.push_back(separator());
 
             if (tasks.empty()) {
-                auto placeholder_box = vbox({
-                    text("No tasks available") | center,
-                    text("Press [N] to create") | center | dim
-                });
+                // Placeholder elements are tokenized dynamically to prevent text boundary spillages.
+                auto placeholder_box = vbox(split_text_to_lines("No tasks available. Press [N] to create.", inside_card_wrap_limit));
 
                 if (is_column_focused) {
-                    content_elements.push_back(window(text("Empty Column") | color(Color::Cyan), placeholder_box) | color(Color::Cyan));
+                    content_elements.push_back(window(text("Empty") | color(Color::Cyan), placeholder_box) | color(Color::Cyan));
                 } else {
                     content_elements.push_back(window(text("Empty"), placeholder_box) | dim);
                 }
@@ -203,24 +212,23 @@ int main() {
                     });
 
                     if (is_task_focused) {
-                        content_elements.push_back(window(text("-> ACTIVE <-") | color(Color::Cyan), task_box) | color(Color::Cyan) | focus);
+                        // The window title is condensed to 'Active' to prevent structural overflow on small displays.
+                        content_elements.push_back(window(text("Active") | color(Color::Cyan), task_box) | color(Color::Cyan) | focus);
                     } else {
                         content_elements.push_back(window(text("Task"), task_box));
                     }
                 }
             }
 
-            // Fixed headers and a dynamically scrollable frame area are compiled together.
             return vbox({
                 vbox(std::move(header_elements)),
                 vbox(std::move(content_elements)) | frame | vscroll_indicator | flex
             }) 
             | size(WIDTH, EQUAL, computed_column_width)
-            | flex; // Allows the column container to safely expand vertically up to the parent constraint ceiling
+            | flex; 
         };
 
         // Separate columns are aligned horizontally.
-        // HEIGHT constraint is twardo locked to terminal floor size to enforce correct scrolling behavior.
         auto board_layout = ftxui::hbox({
             render_column("TO DO", todo_tasks, 0, Color::Red),
             separator(),
