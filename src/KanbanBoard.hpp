@@ -17,4 +17,6 @@ public:
     std::vector<Task> getTasksByStatus(TaskStatus status) const;
 
     bool updateTaskStatus(int id, TaskStatus new_status);
+
+    void updateTaskDetails(int id, const std::string& new_title, const std::string& new_description);
 };
