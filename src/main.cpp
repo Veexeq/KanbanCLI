@@ -2,6 +2,7 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/event.hpp>
+#include <ftxui/screen/terminal.hpp> // Added to unlock real-time terminal window queries
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -73,12 +74,22 @@ int main() {
 
     auto renderer = Renderer(modal_container, [&] {
         
-        // A robust custom text tokenizer lambda is established to resolve the FTXUI paragraph redraw bug.
-        // This splits a continuous string into discrete text nodes based on a strict maximum horizontal width.
+        // Dynamic structural metrics are fetched directly from the active console buffer.
+        auto terminal_dimensions = ftxui::Terminal::Size();
+        
+        // Strict geometric allocations are calculated to guarantee a perfect mathematical 33% grid split.
+        int computed_column_width = (terminal_dimensions.dimx - 2) / 3;
+        if (computed_column_width < 15) computed_column_width = 15; // Lower safety ceiling boundary
+        
+        // Safe line wrapping limits are established based on the active dynamic column bounds.
+        int inside_card_wrap_limit = computed_column_width - 6;
+        if (inside_card_wrap_limit < 5) inside_card_wrap_limit = 5;
+
+        // A robust custom text tokenizer lambda is established to slice strings cleanly.
         auto split_text_to_lines = [](const std::string& text_payload, size_t max_line_width) {
             Elements line_nodes;
             if (text_payload.empty()) {
-                line_nodes.push_back(text("No description provided yet...") | dim);
+                line_nodes.push_back(text("No content provided...") | dim);
                 return line_nodes;
             }
             
@@ -131,8 +142,6 @@ int main() {
                     hbox(text("  Input Line:  ") | bold, input_desc->Render()),
                     text(""),
                     
-                    // The custom tokenized rows are wrapped into a stable vbox container block.
-                    // This forces a real physical layout allocation pass, safely pushing lower elements downward.
                     window(text(" Description Canvas (Dynamic Multiline View) ") | color(Color::Yellow),
                            vbox(split_text_to_lines(input_desc_buffer, 65))
                     ),
@@ -143,7 +152,7 @@ int main() {
                 }) 
                 | border 
                 | center 
-                | size(WIDTH, EQUAL, 75), // Fixed height constraints are fully omitted to let the window size scale natively
+                | size(WIDTH, EQUAL, 75),
                 text("") | flex
             }) | center;
         }
@@ -167,7 +176,7 @@ int main() {
             if (tasks.empty()) {
                 auto placeholder_box = vbox({
                     text("No tasks available") | center,
-                    text("Press [N] to create a new task") | center | dim
+                    text("Press [N] to create") | center | dim
                 });
 
                 if (is_column_focused) {
@@ -179,12 +188,12 @@ int main() {
                 for (size_t i = 0; i < tasks.size(); ++i) {
                     bool is_task_focused = (is_column_focused && selected_task_index == static_cast<int>(i));
                     
+                    // Task boxes wrap strings safely using the calculated real-time boundary limit metrics.
                     auto task_box = vbox({
-                        text(tasks[i].title) | bold,
-                        text("ID: " + std::to_string(tasks[i].id) + " | " + tasks[i].created_at) | dim,
+                        vbox(split_text_to_lines(tasks[i].title, inside_card_wrap_limit)) | bold,
+                        text("ID: " + std::to_string(tasks[i].id) + " | " + tasks[i].created_at.substr(0, 10)) | dim,
                         separatorDashed(),
-                        // Tokenized row generation is applied to dashboard cards to maintain layout integrity.
-                        vbox(split_text_to_lines(tasks[i].description, 28)) 
+                        vbox(split_text_to_lines(tasks[i].description, inside_card_wrap_limit)) 
                     });
 
                     if (is_task_focused) {
@@ -195,16 +204,18 @@ int main() {
                 }
             }
 
-            return vbox(std::move(task_elements)) | flex;
+            // Columns are strictly forced to match the calculated mathematical slice value.
+            return vbox(std::move(task_elements)) | size(WIDTH, EQUAL, computed_column_width);
         };
 
+        // Separate columns are aligned horizontally.
         auto board_layout = ftxui::hbox({
             render_column("TO DO", todo_tasks, 0, Color::Red),
             separator(),
             render_column("IN PROGRESS", in_progress_tasks, 1, Color::Yellow),
             separator(),
             render_column("DONE", done_tasks, 2, Color::Green),
-        }) | flex;
+        });
 
         auto status_bar = ftxui::hbox({
             text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
