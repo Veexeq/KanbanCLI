@@ -2,7 +2,7 @@
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/component/event.hpp>
-#include <ftxui/screen/terminal.hpp> // Added to unlock real-time terminal window queries
+#include <ftxui/screen/terminal.hpp> 
 #include <vector>
 #include <string>
 #include <algorithm>
@@ -77,10 +77,15 @@ int main() {
         // Dynamic structural metrics are fetched directly from the active console buffer.
         auto terminal_dimensions = ftxui::Terminal::Size();
         
-        // Strict geometric allocations are calculated to guarantee a perfect mathematical 33% grid split.
+        // Strict geometric width allocations are calculated to guarantee a perfect 33% grid split.
         int computed_column_width = (terminal_dimensions.dimx - 2) / 3;
-        if (computed_column_width < 15) computed_column_width = 15; // Lower safety ceiling boundary
+        if (computed_column_width < 15) computed_column_width = 15; 
         
+        // CRITICAL FIX: The maximum structural vertical boundary height limit is strictly locked 
+        // to prevent terminal-level buffer thrashing and window flickering on Windows.
+        int computed_board_height = terminal_dimensions.dimy - 3;
+        if (computed_board_height < 5) computed_board_height = 5;
+
         // Safe line wrapping limits are established based on the active dynamic column bounds.
         int inside_card_wrap_limit = computed_column_width - 6;
         if (inside_card_wrap_limit < 5) inside_card_wrap_limit = 5;
@@ -163,15 +168,17 @@ int main() {
         auto done_tasks = board.getTasksByStatus(TaskStatus::DONE);
 
         auto render_column = [&](const std::string& title, const std::vector<::Task>& tasks, int column_id, Color header_color) {
-            Elements task_elements;
+            Elements header_elements;
+            Elements content_elements;
             bool is_column_focused = (selected_column == column_id);
 
+            // Sticky Area: Generated outside the frame block to keep column names docked.
             if (is_column_focused && tasks.empty()) {
-                task_elements.push_back(text("-> " + title + " <-") | bold | color(Color::Cyan) | hcenter);
+                header_elements.push_back(text("-> " + title + " <-") | bold | color(Color::Cyan) | hcenter);
             } else {
-                task_elements.push_back(text("  " + title + "  ") | bold | color(header_color) | hcenter);
+                header_elements.push_back(text("  " + title + "  ") | bold | color(header_color) | hcenter);
             }
-            task_elements.push_back(separator());
+            header_elements.push_back(separator());
 
             if (tasks.empty()) {
                 auto placeholder_box = vbox({
@@ -180,15 +187,14 @@ int main() {
                 });
 
                 if (is_column_focused) {
-                    task_elements.push_back(window(text("Empty Column") | color(Color::Cyan), placeholder_box) | color(Color::Cyan));
+                    content_elements.push_back(window(text("Empty Column") | color(Color::Cyan), placeholder_box) | color(Color::Cyan));
                 } else {
-                    task_elements.push_back(window(text("Empty"), placeholder_box) | dim);
+                    content_elements.push_back(window(text("Empty"), placeholder_box) | dim);
                 }
             } else {
                 for (size_t i = 0; i < tasks.size(); ++i) {
                     bool is_task_focused = (is_column_focused && selected_task_index == static_cast<int>(i));
                     
-                    // Task boxes wrap strings safely using the calculated real-time boundary limit metrics.
                     auto task_box = vbox({
                         vbox(split_text_to_lines(tasks[i].title, inside_card_wrap_limit)) | bold,
                         text("ID: " + std::to_string(tasks[i].id) + " | " + tasks[i].created_at.substr(0, 10)) | dim,
@@ -197,25 +203,31 @@ int main() {
                     });
 
                     if (is_task_focused) {
-                        task_elements.push_back(window(text("-> ACTIVE <-") | color(Color::Cyan), task_box) | color(Color::Cyan));
+                        content_elements.push_back(window(text("-> ACTIVE <-") | color(Color::Cyan), task_box) | color(Color::Cyan) | focus);
                     } else {
-                        task_elements.push_back(window(text("Task"), task_box));
+                        content_elements.push_back(window(text("Task"), task_box));
                     }
                 }
             }
 
-            // Columns are strictly forced to match the calculated mathematical slice value.
-            return vbox(std::move(task_elements)) | size(WIDTH, EQUAL, computed_column_width);
+            // Fixed headers and a dynamically scrollable frame area are compiled together.
+            return vbox({
+                vbox(std::move(header_elements)),
+                vbox(std::move(content_elements)) | frame | vscroll_indicator | flex
+            }) 
+            | size(WIDTH, EQUAL, computed_column_width)
+            | flex; // Allows the column container to safely expand vertically up to the parent constraint ceiling
         };
 
         // Separate columns are aligned horizontally.
+        // HEIGHT constraint is twardo locked to terminal floor size to enforce correct scrolling behavior.
         auto board_layout = ftxui::hbox({
             render_column("TO DO", todo_tasks, 0, Color::Red),
             separator(),
             render_column("IN PROGRESS", in_progress_tasks, 1, Color::Yellow),
             separator(),
             render_column("DONE", done_tasks, 2, Color::Green),
-        });
+        }) | size(HEIGHT, EQUAL, computed_board_height); 
 
         auto status_bar = ftxui::hbox({
             text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
