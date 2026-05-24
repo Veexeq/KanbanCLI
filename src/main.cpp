@@ -54,11 +54,7 @@ int main() {
             }
         }
     } else {
-        // Sample baseline seed entities are deployed if no history is logged.
-        board.addTask("Write presentation", "Prepare slides for university demo", TaskPriority::HIGH);
-        board.addTask("Refactor code", "Clean up variable names and enforce consistency", TaskPriority::MEDIUM);
-        board.addTask("Buy coffee", "Crucial resource for long programming sessions", TaskPriority::LOW);
-        board.updateTaskStatus(2, TaskStatus::IN_PROGRESS);
+        // Production Configuration: An empty database state is initialized cleanly on the first execution.
         saveBoardState(board, storage);
     }
 
@@ -210,7 +206,6 @@ int main() {
                 for (size_t i = 0; i < tasks.size(); ++i) {
                     bool is_task_focused = (is_column_focused && state.selected_task_index == static_cast<int>(i));
                     
-                    // Item 4: Priority decoration lookup color strategy tracking selection matrix
                     Color priority_tag_color = Theme::COLOR_PRIORITY_MEDIUM;
                     std::string priority_label = "MED";
                     if (tasks[i].priority == TaskPriority::HIGH) {
@@ -234,7 +229,6 @@ int main() {
                     if (is_task_focused) {
                         content_elements.push_back(window(text("Active") | color(Theme::COLOR_FOCUS), task_box) | color(Theme::COLOR_FOCUS) | focus);
                     } else {
-                        // Task boxes are subtley bordered with their priority theme accent to avoid flat visual layouts
                         content_elements.push_back(window(text("Task"), task_box) | color(priority_tag_color));
                     }
                 }
@@ -248,14 +242,13 @@ int main() {
             | flex; 
         };
 
-        // Separate columns are aligned horizontally.
         auto board_layout = ftxui::hbox({
             render_column("TO DO", todo_tasks, 0, Theme::COLOR_TODO_HEADER),
             separator(),
             render_column("IN PROGRESS", in_progress_tasks, 1, Theme::COLOR_PROGRESS_HEADER),
             separator(),
             render_column("DONE", done_tasks, 2, Theme::COLOR_DONE_HEADER),
-        }) | size(HEIGHT, EQUAL, computed_board_height);
+        }) | size(HEIGHT, EQUAL, computed_board_height); 
 
         Element status_bar;
         if (is_narrow_viewport) {
@@ -289,7 +282,6 @@ int main() {
         return vbox({ board_layout, separator(), status_bar });
     });
 
-    // Main polling operational event routing interceptor closure block.
     auto catch_event = CatchEvent(renderer, [&](Event event) {
         auto get_current_tasks_vector = [&]() -> std::vector<::Task> {
             if (state.selected_column == 0) return board.getTasksByStatus(TaskStatus::TODO);
@@ -297,7 +289,6 @@ int main() {
             return board.getTasksByStatus(TaskStatus::DONE);
         };
 
-        // Routing Sub-Path A: Event trapping when deletion safety prompt verification layer is active.
         if (state.is_confirming_delete) {
             if (event == Event::Character('y') || event == Event::Character('Y')) {
                 auto active_vector = get_current_tasks_vector();
@@ -317,10 +308,9 @@ int main() {
                 state.flushBuffers();
                 return true;
             }
-            return true; // Absorb other keystroke signals while confirmation overlay is pinned active
+            return true; 
         }
 
-        // Routing Sub-Path B: Event trapping when creation dialogue modal view layer is active.
         if (state.is_modal_active) {
             if (event == Event::Escape) {
                 state.flushBuffers();
@@ -341,7 +331,6 @@ int main() {
             return modal_container->OnEvent(event);
         }
 
-        // Routing Sub-Path C: Standard main dashboard key bindings management.
         if (event == Event::Character('q') || event == Event::Character('Q')) {
             screen.Exit();
             return true;
@@ -356,7 +345,6 @@ int main() {
         auto active_vector = get_current_tasks_vector();
         bool has_active_task = (!active_vector.empty() && state.selected_task_index < static_cast<int>(active_vector.size()));
 
-        // Item 4: Delete Confirmation state trigger mechanism tracking interception.
         if ((event == Event::Character('d') || event == Event::Character('D')) && has_active_task) {
             state.is_confirming_delete = true;
             return true;
@@ -427,7 +415,7 @@ int main() {
         return false;
     });
 
-    std::cout << " [2J [H" << std::flush;
+    std::cout << "\033[2J\033[H" << std::flush;
     screen.Loop(catch_event);
 
     return 0;
