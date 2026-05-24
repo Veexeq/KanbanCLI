@@ -15,7 +15,7 @@ You do not need any programming environment, CMake, or compilers installed to ru
 3. Extract the ZIP archive contents anywhere on your local storage drive.
 4. Double-click the **`run_kanban.bat`** file script. 
 
-The application launcher will automatically resize your active command shell window buffer configuration (`120x35`), set the workspace context title, and initialize a clean interface seamlessly.
+The application launcher will automatically resize your active command shell window buffer configuration to fullscreen, set the workspace context title, and initialize a clean interface seamlessly.
 
 ---
 
