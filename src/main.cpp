@@ -78,7 +78,34 @@ int main() {
 
     // The declarative layout UI structure is defined within the main renderer loop.
     auto renderer = Renderer(modal_container, [&] {
-        // Active task collections are fetched dynamically on each layout loop.
+        
+        // Approach 1 Execution Path: If the modal state is active, the Kanban board layout is completely bypassed.
+        if (is_modal_active) {
+            return vbox({
+                text("") | flex,
+                vbox({
+                    text(" CREATE NEW TASK ") | bold | color(Color::Cyan) | hcenter,
+                    separator(),
+                    text(""),
+                    
+                    // Form input fields are rendered on a clean terminal buffer slate.
+                    hbox(text("  Title:       ") | bold, input_title->Render() | focus),
+                    text(""),
+                    hbox(text("  Description: ") | bold, input_desc->Render()),
+                    text(""),
+                    
+                    separator(),
+                    text(" [Enter] Confirm Allocation  |  [Esc] Abort and Close ") | center | dim
+                }) 
+                | border 
+                | center 
+                | size(WIDTH, EQUAL, 70) 
+                | size(HEIGHT, EQUAL, 11),
+                text("") | flex
+            }) | center;
+        }
+
+        // Standard Execution Path: The primary dashboard view is rendered when the modal is inactive.
         auto todo_tasks = board.getTasksByStatus(TaskStatus::TODO);
         auto in_progress_tasks = board.getTasksByStatus(TaskStatus::IN_PROGRESS);
         auto done_tasks = board.getTasksByStatus(TaskStatus::DONE);
@@ -150,29 +177,7 @@ int main() {
             text(" [Q] Quit ") | bgcolor(Color::Red) | bold
         });
 
-        // The primary dashboard view is aggregated inside a unified vertical canvas frame.
-        auto main_dashboard_view = vbox({ board_layout, separator(), status_bar });
-
-        // If the modal layer toggle is active, an overlay layout interface is rendered.
-        if (is_modal_active) {
-            auto modal_box = vbox({
-                text(" CREATE NEW TASK ") | bold | color(Color::Cyan) | hcenter,
-                separator(),
-                hbox(text("Title:       ") | bold, input_title->Render() | focus),
-                separatorDashed(),
-                hbox(text("Description: ") | bold, input_desc->Render()),
-                separator(),
-                text(" [Enter] Confirm Allocation  |  [Esc] Abort and Close ") | center | dim
-            }) | border | bgcolor(Color::Black) | center | size(WIDTH, LESS_THAN, 60);
-
-            // The component layering is simplified by removing the undefined clear_panel helper.
-            return dbox({
-                main_dashboard_view,
-                modal_box
-            });
-        }
-
-        return main_dashboard_view;
+        return vbox({ board_layout, separator(), status_bar });
     });
 
     // Keyboard capture sequences are parsed and intercepted within the global runtime event block.
@@ -184,7 +189,7 @@ int main() {
             return board.getTasksByStatus(TaskStatus::DONE);
         };
 
-        // Execution Path A: Keyboard tracking when the modal dialogue layer is active.
+        // Keyboard tracking is diverted when the modal dialogue layer is active.
         if (is_modal_active) {
             if (event == Event::Escape) {
                 is_modal_active = false;
@@ -208,7 +213,7 @@ int main() {
             return modal_container->OnEvent(event);
         }
 
-        // Execution Path B: Standard control mapping tracking across the dashboard view.
+        // Standard dashboard control mapping tracking.
         if (event == Event::Character('q') || event == Event::Character('Q')) {
             screen.Exit();
             return true;
