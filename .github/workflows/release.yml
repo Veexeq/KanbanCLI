@@ -42,7 +42,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path .\dist
           Copy-Item -Path .\build\kanban_board.exe -Destination .\dist\kanban_board.exe
           Copy-Item -Path .\run_kanban.bat -Destination .\dist\run_kanban.bat
-          "{}" | Out-File -FilePath .\dist\kanban.json -Encoding utf8
+          "[]" | Out-File -FilePath .\dist\kanban.json -Encoding utf8
 
       # Step 5: Compress Target Portfolio to Zip
       - name: Compress Target Portfolio to Zip
