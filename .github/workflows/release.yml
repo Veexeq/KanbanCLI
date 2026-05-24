@@ -17,10 +17,11 @@ jobs:
         uses: actions/checkout@v4
 
       # Step 2: Establish an isolated MSYS2 environment replicating the local developer toolchain.
+      # FIXED: Changed msystem from UCRT64 to MINGW64 to perfectly match the mingw-w64-x86_64 package matrix.
       - name: Set up MSYS2 Toolchain Engine
         uses: msys2/setup-msys2@v2
         with:
-          msystem: UCRT64
+          msystem: MINGW64
           update: true
           install: >-
             mingw-w64-x86_64-gcc
@@ -40,7 +41,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path .\dist
           Copy-Item -Path .\build\kanban_board.exe -Destination .\dist\kanban_board.exe
-          Copy-Item -Path .\run_kanban.bat -Destination .\dist\run_kanban.bat
+          Copy-Item -Path .\Uruchom_Kanban.bat -Destination .\dist\Uruchom_Kanban.bat
           
           # Initialize a pristine production JSON database for the user bundle
           "{}" | Out-File -FilePath .\dist\kanban.json -Encoding utf8
