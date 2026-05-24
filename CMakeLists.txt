@@ -37,6 +37,8 @@ add_executable(kanban_board
     ./src/Task.hpp
     ./src/StorageManager.cpp
     ./src/StorageManager.hpp
+    ./src/AppState.hpp
+    ./src/Theme.hpp
 )
 
 target_link_libraries(kanban_board PRIVATE 
@@ -52,6 +54,8 @@ add_executable(run_tests
     ./src/KanbanBoard.hpp 
     ./src/StorageManager.cpp
     ./src/StorageManager.hpp
+    ./src/AppState.hpp
+    ./src/Theme.hpp
 )
 
 target_link_libraries(run_tests PRIVATE 
