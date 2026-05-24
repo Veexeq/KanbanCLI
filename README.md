@@ -10,7 +10,7 @@ You do not need any programming environment, CMake, or compilers installed to ru
 
 ### 📦 1-Click Launch Setup
 
-1. Head over to the **[Releases](https://github.com/)** section on the right side of this repository and download the latest `kanban_board_windows.zip`.
+1. Head over to the **[Releases](https://github.com/Veexeq/KanbanCLI/releases/tag/v1.0.4)** section on the right side of this repository and download the latest `kanban_board_windows.zip`.
 2. **CRITICAL SECURITY STEP:** Before unzipping, right-click on the downloaded `kanban_board_windows.zip` file, select **Properties**, check the **Unblock** (*Odblokuj*) checkbox at the bottom safety section, and click **Apply**. *(This removes the OS download flag to prevent unsigned security prompts).*
 3. Extract the ZIP archive contents anywhere on your local storage drive.
 4. Double-click the **`run_kanban.bat`** file script. 
