@@ -6,7 +6,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
-#include <iostream> // Added to support standard stream flushes
+#include <iostream> 
 #include "KanbanBoard.hpp"
 #include "StorageManager.hpp"
 
@@ -82,10 +82,9 @@ int main() {
         int computed_column_width = (terminal_dimensions.dimx - 2) / 3;
         if (computed_column_width < 15) computed_column_width = 15; 
         
-        // CRITICAL UX FIX: Responsive layout toggle thresholds are checked to dynamically re-scale heights.
-        bool is_narrow_viewport = (terminal_dimensions.dimx < 95);
+        // Responsive layout toggle thresholds are checked to dynamically re-scale heights.
+        bool is_narrow_viewport = (terminal_dimensions.dimx < 115); // Width extended to accommodate extra hotkey legend
         
-        // The mathematical layout height targets 100% screen utilization precisely based on row stack depth.
         int computed_board_height = terminal_dimensions.dimy - (is_narrow_viewport ? 3 : 2);
         if (computed_board_height < 5) computed_board_height = 5;
 
@@ -236,28 +235,28 @@ int main() {
             render_column("DONE", done_tasks, 2, Color::Green),
         }) | size(HEIGHT, EQUAL, computed_board_height); 
 
-        // CRITICAL FIX: The interface control legend responds dynamically to structural width changes.
+        // The interface control legend responds dynamically, now featuring the Backward command tracking.
         Element status_bar;
         if (is_narrow_viewport) {
-            // A condensed double-row block architecture prevents wrap overflow failures on small terminals.
             status_bar = vbox({
                 hbox({
                     text(" [Arrows] Focus Grid ") | bgcolor(Color::Blue) | bold,
-                    text(" [Space] Move Column ") | bgcolor(Color::Green),
-                    text(" [N] New Task ") | bgcolor(Color::Cyan)
+                    text(" [Space] Move Forward ") | bgcolor(Color::Green),
+                    text(" [Backspace] Move Back ") | bgcolor(Color::Yellow) | color(Color::Black)
                 }),
                 hbox({
-                    text(" [E] Edit Task ") | bgcolor(Color::Magenta), 
+                    text(" [N] New ") | bgcolor(Color::Cyan),
+                    text(" [E] Edit ") | bgcolor(Color::Magenta), 
                     text(" [D] Delete ") | bgcolor(Color::GrayDark),
                     text(" ") | flex,
                     text(" [Q] Quit ") | bgcolor(Color::Red) | bold
                 })
             });
         } else {
-            // A streamlined single-line configuration layout is activated on large screen buffers.
             status_bar = ftxui::hbox({
                 text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
-                text(" [Space/Enter] Move Column ") | bgcolor(Color::Green),
+                text(" [Space/Enter] Forward ") | bgcolor(Color::Green),
+                text(" [Backspace] Back ") | bgcolor(Color::Yellow) | color(Color::Black),
                 text(" [N] New ") | bgcolor(Color::Cyan),
                 text(" [E] Edit ") | bgcolor(Color::Magenta), 
                 text(" [D] Delete ") | bgcolor(Color::GrayDark),
@@ -339,6 +338,7 @@ int main() {
             return true;
         }
 
+        // Advanced Transition State Hook: Forward Direction (Space or Enter).
         if ((event == Event::Special(" ") || event == Event::Return) && has_active_task) {
             auto task_to_move = active_vector[selected_task_index];
             if (selected_column == 0) {
@@ -347,6 +347,24 @@ int main() {
                 board.updateTaskStatus(task_to_move.id, TaskStatus::DONE);
             }
             saveBoardState(board, storage);
+            int revised_size = static_cast<int>(get_current_tasks_vector().size());
+            if (selected_task_index >= revised_size && revised_size > 0) {
+                selected_task_index = revised_size - 1;
+            }
+            return true;
+        }
+
+        // Advanced Transition State Hook: Backward Direction (Backspace).
+        if (event == Event::Backspace && has_active_task) {
+            auto task_to_move = active_vector[selected_task_index];
+            if (selected_column == 2) {
+                board.updateTaskStatus(task_to_move.id, TaskStatus::IN_PROGRESS);
+            } else if (selected_column == 1) {
+                board.updateTaskStatus(task_to_move.id, TaskStatus::TODO);
+            }
+            saveBoardState(board, storage);
+            
+            // Recalculate focus vector bounds to handle structural array shifts safely.
             int revised_size = static_cast<int>(get_current_tasks_vector().size());
             if (selected_task_index >= revised_size && revised_size > 0) {
                 selected_task_index = revised_size - 1;
@@ -379,7 +397,6 @@ int main() {
         return false;
     });
 
-    // CRITICAL FIX: The terminal screen buffer is cleared completely before starting the main loop interface.
     std::cout << "\033[2J\033[H" << std::flush;
 
     screen.Loop(catch_event);
