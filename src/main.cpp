@@ -55,14 +55,14 @@ int main() {
 
     // Modal view tracking variables and input buffers are established.
     bool is_modal_active = false;
-    bool is_edit_mode = false;      // New state tracker to distinguish creation from modification
-    int editing_task_id = -1;       // Stores the active ID of the entity being mutated
+    bool is_edit_mode = false;      
+    int editing_task_id = -1;       
     
     std::string input_title_buffer;
     std::string input_desc_buffer;
 
     Component input_title = Input(&input_title_buffer, "Enter task title...");
-    Component input_desc = Input(&input_desc_buffer, "Enter task description...");
+    Component input_desc = Input(&input_desc_buffer, "Type descriptive details here...");
 
     auto modal_container = Container::Vertical({
         input_title,
@@ -73,9 +73,50 @@ int main() {
 
     auto renderer = Renderer(modal_container, [&] {
         
+        // A robust custom text tokenizer lambda is established to resolve the FTXUI paragraph redraw bug.
+        // This splits a continuous string into discrete text nodes based on a strict maximum horizontal width.
+        auto split_text_to_lines = [](const std::string& text_payload, size_t max_line_width) {
+            Elements line_nodes;
+            if (text_payload.empty()) {
+                line_nodes.push_back(text("No description provided yet...") | dim);
+                return line_nodes;
+            }
+            
+            std::string current_accumulator = "";
+            std::string current_word = "";
+            
+            for (char character : text_payload) {
+                if (character == ' ') {
+                    if (current_accumulator.length() + current_word.length() + 1 > max_line_width) {
+                        line_nodes.push_back(text(current_accumulator));
+                        current_accumulator = current_word;
+                    } else {
+                        if (!current_accumulator.empty()) current_accumulator += " ";
+                        current_accumulator += current_word;
+                    }
+                    current_word = "";
+                } else {
+                    current_word += character;
+                }
+            }
+            
+            if (!current_word.empty()) {
+                if (current_accumulator.length() + current_word.length() + 1 > max_line_width) {
+                    line_nodes.push_back(text(current_accumulator));
+                    current_accumulator = current_word;
+                } else {
+                    if (!current_accumulator.empty()) current_accumulator += " ";
+                    current_accumulator += current_word;
+                }
+            }
+            if (!current_accumulator.empty()) {
+                line_nodes.push_back(text(current_accumulator));
+            }
+            return line_nodes;
+        };
+
         // Approach 1 Execution Path: The modal sequence is initiated.
         if (is_modal_active) {
-            // The dialogue header title is dynamically changed based on the operational context.
             std::string modal_title = is_edit_mode ? " EDIT ACTIVE TASK " : " CREATE NEW TASK ";
             
             return vbox({
@@ -85,9 +126,16 @@ int main() {
                     separator(),
                     text(""),
                     
-                    hbox(text("  Title:       ") | bold, input_title->Render() | focus),
+                    hbox(text("  Title:       ") | bold, input_title->Render()),
                     text(""),
-                    hbox(text("  Description: ") | bold, input_desc->Render()),
+                    hbox(text("  Input Line:  ") | bold, input_desc->Render()),
+                    text(""),
+                    
+                    // The custom tokenized rows are wrapped into a stable vbox container block.
+                    // This forces a real physical layout allocation pass, safely pushing lower elements downward.
+                    window(text(" Description Canvas (Dynamic Multiline View) ") | color(Color::Yellow),
+                           vbox(split_text_to_lines(input_desc_buffer, 65))
+                    ),
                     text(""),
                     
                     separator(),
@@ -95,8 +143,7 @@ int main() {
                 }) 
                 | border 
                 | center 
-                | size(WIDTH, EQUAL, 70) 
-                | size(HEIGHT, EQUAL, 11),
+                | size(WIDTH, EQUAL, 75), // Fixed height constraints are fully omitted to let the window size scale natively
                 text("") | flex
             }) | center;
         }
@@ -136,7 +183,8 @@ int main() {
                         text(tasks[i].title) | bold,
                         text("ID: " + std::to_string(tasks[i].id) + " | " + tasks[i].created_at) | dim,
                         separatorDashed(),
-                        text(tasks[i].description)
+                        // Tokenized row generation is applied to dashboard cards to maintain layout integrity.
+                        vbox(split_text_to_lines(tasks[i].description, 28)) 
                     });
 
                     if (is_task_focused) {
@@ -158,12 +206,11 @@ int main() {
             render_column("DONE", done_tasks, 2, Color::Green),
         }) | flex;
 
-        // Expanded helper legend layout includes the modification command shortcut.
         auto status_bar = ftxui::hbox({
             text(" [Arrows] Move Focus ") | bgcolor(Color::Blue) | bold,
             text(" [Space/Enter] Move Column ") | bgcolor(Color::Green),
             text(" [N] New ") | bgcolor(Color::Cyan),
-            text(" [E] Edit ") | bgcolor(Color::Magenta), // Added visual shortcut for editing
+            text(" [E] Edit ") | bgcolor(Color::Magenta), 
             text(" [D] Delete ") | bgcolor(Color::GrayDark),
             text(" ") | flex,
             text(" [Q] Quit ") | bgcolor(Color::Red) | bold
@@ -181,7 +228,6 @@ int main() {
 
         if (is_modal_active) {
             if (event == Event::Escape) {
-                // Input buffers and states are safely flushed upon aborting the context.
                 input_title_buffer.clear();
                 input_desc_buffer.clear();
                 is_modal_active = false;
@@ -191,7 +237,6 @@ int main() {
             }
             if (event == Event::Return) {
                 if (!input_title_buffer.empty()) {
-                    // Operational routing is executed based on the active structural mode flag.
                     if (is_edit_mode) {
                         board.updateTaskDetails(editing_task_id, input_title_buffer, input_desc_buffer);
                     } else {
@@ -199,7 +244,6 @@ int main() {
                     }
                     saveBoardState(board, storage);
                     
-                    // Buffers and operational states are cleared post-commit.
                     input_title_buffer.clear();
                     input_desc_buffer.clear();
                     is_modal_active = false;
@@ -218,22 +262,17 @@ int main() {
 
         if (event == Event::Character('n') || event == Event::Character('N')) {
             is_modal_active = true;
-            is_edit_mode = false; // Ensures standard record entry behavior
+            is_edit_mode = false; 
             return true;
         }
 
         auto active_vector = get_current_tasks_vector();
         bool has_active_task = (!active_vector.empty() && selected_task_index < static_cast<int>(active_vector.size()));
 
-        // Edit Command Execution Hook.
         if ((event == Event::Character('e') || event == Event::Character('E')) && has_active_task) {
             auto current_task = active_vector[selected_task_index];
-            
-            // UI buffers are pre-loaded with historical records to support localized text mutation.
             input_title_buffer = current_task.title;
             input_desc_buffer = current_task.description;
-            
-            // Operational flags are configured to activate the modification dialog context.
             editing_task_id = current_task.id;
             is_edit_mode = true;
             is_modal_active = true;
