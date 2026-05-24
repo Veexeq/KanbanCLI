@@ -1,6 +1,5 @@
 name: Automated Production Release
 
-# The workflow is triggered exclusively when a semantic version tag (e.g., v1.0.0) is pushed.
 on:
   push:
     tags:
@@ -10,17 +9,15 @@ jobs:
   build-and-release:
     name: Cross-Compile and Package Artifacts
     runs-on: windows-latest
-
+    
     permissions:
       contents: write
 
     steps:
-      # Step 1: Extract the source code from the repository into the runner workspace.
       - name: Checkout Repository Source
         uses: actions/checkout@v4
 
-      # Step 2: Establish an isolated MSYS2 environment replicating the local developer toolchain.
-      # FIXED: Changed msystem from UCRT64 to MINGW64 to perfectly match the mingw-w64-x86_64 package matrix.
+      # Step 2: Establish MSYS2 environment
       - name: Set up MSYS2 Toolchain Engine
         uses: msys2/setup-msys2@v2
         with:
@@ -31,31 +28,29 @@ jobs:
             mingw-w64-x86_64-cmake
             mingw-w64-x86_64-ninja
 
-      # Step 3: Execute the declarative CMake build pipeline in optimized Release mode.
+      # Step 3: Configure and Compile with STATIC linking flags to bundle standard DLLs
       - name: Configure and Compile Binary Target
         shell: msys2 {0}
         run: |
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXE_LINKER_FLAGS="-static"
           cmake --build build --target kanban_board
 
-      # Step 4: Staging phase - aggregate the binary, launch script, and seed structures.
+      # Step 4: Assemble Deployment Portfolio
       - name: Assemble Deployment Artifacts Portfolio
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path .\dist
           Copy-Item -Path .\build\kanban_board.exe -Destination .\dist\kanban_board.exe
           Copy-Item -Path .\run_kanban.bat -Destination .\dist\run_kanban.bat
-          
-          # Initialize a pristine production JSON database for the user bundle
           "{}" | Out-File -FilePath .\dist\kanban.json -Encoding utf8
 
-      # Step 5: Archive the staging directory into a portable deployment zip file.
+      # Step 5: Compress Target Portfolio to Zip
       - name: Compress Target Portfolio to Zip
         shell: pwsh
         run: |
           Compress-Archive -Path .\dist\* -DestinationPath .\kanban_board_windows.zip
 
-      # Step 6: Instantly build a public GitHub Release and bind the compiled zip asset.
+      # Step 6: Publish Archive to GitHub Releases
       - name: Publish Archive to GitHub Releases Platform
         uses: softprops/action-gh-release@v2
         with:
