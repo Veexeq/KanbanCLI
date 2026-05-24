@@ -1,0 +1,60 @@
+name: Automated Production Release
+
+# The workflow is triggered exclusively when a semantic version tag (e.g., v1.0.0) is pushed.
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Cross-Compile and Package Artifacts
+    runs-on: windows-latest
+
+    steps:
+      # Step 1: Extract the source code from the repository into the runner workspace.
+      - name: Checkout Repository Source
+        uses: actions/checkout@v4
+
+      # Step 2: Establish an isolated MSYS2 environment replicating the local developer toolchain.
+      - name: Set up MSYS2 Toolchain Engine
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+
+      # Step 3: Execute the declarative CMake build pipeline in optimized Release mode.
+      - name: Configure and Compile Binary Target
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --target kanban_board
+
+      # Step 4: Staging phase - aggregate the binary, launch script, and seed structures.
+      - name: Assemble Deployment Artifacts Portfolio
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .\dist
+          Copy-Item -Path .\build\kanban_board.exe -Destination .\dist\kanban_board.exe
+          Copy-Item -Path .\run_kanban.bat -Destination .\dist\run_kanban.bat
+          
+          # Initialize a pristine production JSON database for the user bundle
+          "{}" | Out-File -FilePath .\dist\kanban.json -Encoding utf8
+
+      # Step 5: Archive the staging directory into a portable deployment zip file.
+      - name: Compress Target Portfolio to Zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path .\dist\* -DestinationPath .\kanban_board_windows.zip
+
+      # Step 6: Instantly build a public GitHub Release and bind the compiled zip asset.
+      - name: Publish Archive to GitHub Releases Platform
+        uses: softprops/action-gh-release@v2
+        with:
+          files: kanban_board_windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
