@@ -63,3 +63,42 @@ TEST_CASE("StorageManager persistence", "[storage]") {
         std::remove(test_file.c_str());
     }
 }
+
+TEST_CASE("KanbanBoard - Logic Mutations", "[kanban]") {
+    KanbanBoard board;
+    
+    // Test base setup
+    board.addTask("Original Title", "Original Desc", TaskPriority::MEDIUM);
+    // Assuming the first added task gets ID 1
+    int taskId = 1; 
+
+    SECTION("Task details can be updated successfully") {
+        board.updateTaskDetails(taskId, "New Title", "New Desc");
+        
+        auto todo_tasks = board.getTasksByStatus(TaskStatus::TODO);
+        REQUIRE(todo_tasks.size() == 1);
+        CHECK(todo_tasks[0].title == "New Title");
+        CHECK(todo_tasks[0].description == "New Desc");
+    }
+
+    SECTION("Task can be moved backward through columns") {
+        // Move forward to DONE first
+        board.updateTaskStatus(taskId, TaskStatus::IN_PROGRESS);
+        board.updateTaskStatus(taskId, TaskStatus::DONE);
+        
+        // Test moving backward: DONE -> IN_PROGRESS
+        board.updateTaskStatus(taskId, TaskStatus::IN_PROGRESS);
+        CHECK(board.getTasksByStatus(TaskStatus::IN_PROGRESS).size() == 1);
+        CHECK(board.getTasksByStatus(TaskStatus::DONE).empty());
+
+        // Test moving backward: IN_PROGRESS -> TODO
+        board.updateTaskStatus(taskId, TaskStatus::TODO);
+        CHECK(board.getTasksByStatus(TaskStatus::TODO).size() == 1);
+        CHECK(board.getTasksByStatus(TaskStatus::IN_PROGRESS).empty());
+    }
+
+    SECTION("Task can be removed from the board") {
+        board.removeTask(taskId);
+        CHECK(board.getTasksByStatus(TaskStatus::TODO).empty());
+    }
+}
